@@ -1,15 +1,7 @@
-name: Run Private park.sh (quiet, masked)
+name: Run Private Workflow
 
 on:
-  workflow_dispatch:
-    inputs:
-      url:
-        description: "Target URL (https://...)"
-        required: true
-      countries:
-        description: "EU,AM,... (15 adet; boşsa default)"
-        required: false
-        default: "EU,AM,EU,AM,EU,AM,EU,AM,EU,AM,EU,AM,EU,AM,EU"
+  workflow_dispatch: {}
 
 jobs:
   run:
@@ -19,65 +11,18 @@ jobs:
       contents: read
 
     steps:
-      - name: Mask inputs in logs
-        run: |
-          echo "::add-mask::${{ inputs.url }}"
-          echo "::add-mask::${{ inputs.countries }}"
-          # Olası env isimleri de maskelensin
-          echo "::add-mask::TARGET_URL=${{ inputs.url }}"
-          echo "::add-mask::COUNTRIES=${{ inputs.countries }}"
-
-      - name: Checkout private repo (read-only)
+      - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: aynibakbabm/private-repo   # repo adını doğrula
+          repository: your-username/your-private-repo
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: .priv
           persist-credentials: false
 
-      - name: Preflight (deps & docker sanity)
-        run: |
-          set -e
-          sudo apt-get update -y
-          sudo apt-get install -y curl
-          docker --version
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Run park.sh quietly (masked)
+      - name: Run private script
         env:
-          TARGET_URL: ${{ inputs.url }}        # park.sh/Node bunu okuyor
-          COUNTRIES: ${{ inputs.countries }}
-        shell: bash
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          COUNTRIES: ${{ secrets.COUNTRIES }}
         run: |
-          set -e
-          chmod +x .priv/park.sh || true
-
-          # Tüm çıktıyı log dosyasına al
-          ( set +x; .priv/park.sh > run.log 2>&1 ) &
-          pid=$!
-
-          # Sessizlikte job kill olmasın diye 5 dakikada bir nabız
-          while kill -0 "$pid" 2>/dev/null; do
-            echo "running..."
-            sleep 300
-          done
-
-          # Exit kodunu al; hata varsa redakte edilmiş son 200 satırı göster
-          wait "$pid" || {
-            echo "----- SANITIZED LAST 200 LINES OF run.log -----"
-            # URL, IP ve countries'leri logta sakla
-            tail -n 200 run.log \
-              | sed -E 's#https?://[^[:space:]]+#[REDACTED_URL]#g' \
-              | sed -E 's/([0-9]{1,3}\.){3}[0-9]{1,3}/[REDACTED_IP]/g' \
-              | sed -E 's/'"$COUNTRIES"'/[REDACTED_COUNTRIES]/g'
-            exit 1
-          }
-
-      - name: Secure cleanup (no artifacts)
-        if: always()
-        run: |
-          shred -u run.log || rm -f run.log || true
+          chmod +x .priv/park.sh
+          .priv/park.sh
